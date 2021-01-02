@@ -14,6 +14,10 @@ from matplotlib import cm
 
 
 def restrict(A):
+    """
+    Creates a new grid of points which is half the size of the original
+    grid in each dimension.
+    """
     n = A.shape[0]
     m = A.shape[1]
     new_n = int((n-2)/2+2)
@@ -30,6 +34,10 @@ def restrict(A):
 
 
 def interpolate_array(A):
+    """
+    Creates a grid of points which is double the size of the original
+    grid in each dimension. Uses linear interpolation between grid points.
+    """
     n = A.shape[0]
     m = A.shape[1]
     new_n = int((n-2)*2 + 2)
@@ -37,7 +45,7 @@ def interpolate_array(A):
     new_array = np.zeros((new_n, new_m))
     i = (np.indices(A.shape)[0]/(A.shape[0]-1)).flatten()
     j = (np.indices(A.shape)[1]/(A.shape[1]-1)).flatten()
-    # points = np.vstack((i.flatten(), j.flatten())).T
+
     A = A.flatten()
     new_i = np.linspace(0, 1, new_n)
     new_j = np.linspace(0, 1, new_m)
@@ -47,6 +55,9 @@ def interpolate_array(A):
 
 
 def adjacency_matrix(rows, cols):
+    """
+    Creates the adjacency matrix for an n by m shaped grid
+    """
     n = rows*cols
     M = np.zeros((n,n))
     for r in range(rows):
@@ -60,6 +71,9 @@ def adjacency_matrix(rows, cols):
 
 
 def create_differences_matrix(rows, cols):
+    """
+    Creates the central differences matrix A for an n by m shaped grid
+    """
     n = rows*cols
     M = np.zeros((n,n))
     for r in range(rows):
@@ -74,6 +88,9 @@ def create_differences_matrix(rows, cols):
 
 
 def set_BC(A):
+    """
+    Sets the boundary conditions of the field
+    """
     A[:, 0] = A[:, 1]
     A[:, -1] = A[:, -2]
     A[0, :] = A[1, :]
@@ -82,6 +99,10 @@ def set_BC(A):
 
 
 def create_A(n,m):
+    """
+    Creates all the components required for the jacobian update function
+    for an n by m shaped grid
+    """
     LaddU = adjacency_matrix(n,m)
     A = create_differences_matrix(n,m)
     invD = np.zeros((n*m, n*m))
@@ -90,6 +111,9 @@ def create_A(n,m):
 
 
 def calc_RJ(rows, cols):
+    """
+    Calculates the jacobian update matrix Rj for an n by m shaped grid
+    """
     n = int(rows*cols)
     M = np.zeros((n,n))
     for r in range(rows):
@@ -104,6 +128,10 @@ def calc_RJ(rows, cols):
 
 
 def jacobi_update(v, f, nsteps=1, max_err=1e-3):
+    """
+    Uses a jacobian update matrix to solve nabla(v) = f
+    """
+    
     f_inner = f[1:-1, 1:-1].flatten()
     n = v.shape[0]
     m = v.shape[1]
@@ -126,6 +154,9 @@ def jacobi_update(v, f, nsteps=1, max_err=1e-3):
 
 
 def MGV(f, v):
+    """
+    Solves for nabla(v) = f using a multigrid method
+    """
     # global  A, r
     n = v.shape[0]
     m = v.shape[1] 
@@ -159,6 +190,7 @@ def MGV(f, v):
 
 sigma = 0
 
+# Setting up the grid
 k = 6
 n = 2**k+2
 m = 2**(k)+2
@@ -173,14 +205,18 @@ x = np.linspace(0, L, n)
 y = np.linspace(0, H, m)
 XX, YY = np.meshgrid(x, y)
 
+# Setting up the initial conditions
 f = np.ones((n,m))
 v = np.zeros((n,m))
 
+# How many V cyles to perform
 err = 1
-n_cycles = 100
+n_cycles = 10
 loop = True
 cycle = 0
 
+# Perform V cycles until converged or reached the maximum
+# number of cycles
 while loop:
     cycle += 1
     v_new = MGV(f, v)
