@@ -74,10 +74,10 @@ def create_differences_matrix(rows, cols):
 
 
 def set_BC(A):
-    A[:, 0] = 0
-    A[:, -1] = 0
-    A[0, :] = 0
-    A[-1, :] = 0
+    A[:, 0] = A[:, 1]
+    A[:, -1] = A[:, -2]
+    A[0, :] = A[1, :]
+    A[-1, :] = A[-2, :]
     return A
 
 
@@ -159,7 +159,7 @@ def MGV(f, v):
 
 sigma = 0
 
-k = 5 
+k = 6
 n = 2**k+2
 m = 2**(k)+2
 
@@ -173,10 +173,10 @@ x = np.linspace(0, L, n)
 y = np.linspace(0, H, m)
 XX, YY = np.meshgrid(x, y)
 
-f = np.ones((n,m))*0
-v = np.ones((n,m))*0
+f = np.ones((n,m))
+v = np.zeros((n,m))
 
-err = 1e-3
+err = 1
 n_cycles = 100
 loop = True
 cycle = 0
