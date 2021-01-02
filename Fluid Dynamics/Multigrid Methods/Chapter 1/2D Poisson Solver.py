@@ -1,0 +1,196 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Dec 29 16:24:16 2020
+
+@author: mclea
+"""
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.signal import convolve2d
+from mpl_toolkits.mplot3d import Axes3D
+from scipy.interpolate import griddata
+from matplotlib import cm
+
+
+def restrict(A):
+    n = A.shape[0]
+    m = A.shape[1]
+    new_n = int((n-2)/2+2)
+    new_m = int((m-2)/2+2)
+    new_array = np.zeros((new_n, new_m))
+    for i in range(1, new_n-1):
+        for j in range(1, new_m-1):
+            ii = int((i-1)*2)+1
+            jj = int((j-1)*2)+1
+            # print(i, j, ii, jj)
+            new_array[i,j] = np.average(A[ii:ii+2, jj:jj+2])
+    new_array = set_BC(new_array)
+    return new_array
+
+
+def interpolate_array(A):
+    n = A.shape[0]
+    m = A.shape[1]
+    new_n = int((n-2)*2 + 2)
+    new_m = int((m-2)*2 + 2)
+    new_array = np.zeros((new_n, new_m))
+    i = (np.indices(A.shape)[0]/(A.shape[0]-1)).flatten()
+    j = (np.indices(A.shape)[1]/(A.shape[1]-1)).flatten()
+    # points = np.vstack((i.flatten(), j.flatten())).T
+    A = A.flatten()
+    new_i = np.linspace(0, 1, new_n)
+    new_j = np.linspace(0, 1, new_m)
+    new_ii, new_jj = np.meshgrid(new_i, new_j)
+    new_array = griddata((i, j), A, (new_jj, new_ii), method="linear")
+    return new_array
+
+
+def adjacency_matrix(rows, cols):
+    n = rows*cols
+    M = np.zeros((n,n))
+    for r in range(rows):
+        for c in range(cols):
+            i = r*cols + c
+            # Two inner diagonals
+            if c > 0: M[i-1,i] = M[i,i-1] = 1
+            # Two outer diagonals
+            if r > 0: M[i-cols,i] = M[i,i-cols] = 1
+    return M
+
+
+def create_differences_matrix(rows, cols):
+    n = rows*cols
+    M = np.zeros((n,n))
+    for r in range(rows):
+        for c in range(cols):
+            i = r*cols + c
+            # Two inner diagonals
+            if c > 0: M[i-1,i] = M[i,i-1] = -1
+            # Two outer diagonals
+            if r > 0: M[i-cols,i] = M[i,i-cols] = -1
+    np.fill_diagonal(M, 4)
+    return M
+
+
+def set_BC(A):
+    A[:, 0] = 0
+    A[:, -1] = 0
+    A[0, :] = 0
+    A[-1, :] = 0
+    return A
+
+
+def create_A(n,m):
+    LaddU = adjacency_matrix(n,m)
+    A = create_differences_matrix(n,m)
+    invD = np.zeros((n*m, n*m))
+    np.fill_diagonal(invD, 1/4)
+    return A, LaddU, invD
+
+
+def calc_RJ(rows, cols):
+    n = int(rows*cols)
+    M = np.zeros((n,n))
+    for r in range(rows):
+        for c in range(cols):
+            i = r*cols + c
+            # Two inner diagonals
+            if c > 0: M[i-1,i] = M[i,i-1] = 0.25
+            # Two outer diagonals
+            if r > 0: M[i-cols,i] = M[i,i-cols] = 0.25
+
+    return M
+
+
+def jacobi_update(v, f, nsteps=1, max_err=1e-3):
+    f_inner = f[1:-1, 1:-1].flatten()
+    n = v.shape[0]
+    m = v.shape[1]
+    A, LaddU, invD = create_A(n-2, m-2)
+    Rj = calc_RJ(n-2,m-2)
+
+    update=True
+    step = 0
+    while update:
+        v_old = v.copy()
+        step += 1
+        vt = v_old[1:-1, 1:-1].flatten()
+        vt = np.dot(Rj, vt) + np.dot(invD, f_inner)
+        v[1:-1, 1:-1] = vt.reshape((n-2),(m-2))
+        err = v - v_old
+        if step == nsteps or np.abs(err).max()<max_err:
+            update=False
+    
+    return v, (step, np.abs(err).max())
+
+
+def MGV(f, v):
+    # global  A, r
+    n = v.shape[0]
+    m = v.shape[1] 
+    
+    # If on the smallest grid size, compute the exact solution
+    if n <= 6 or m <=6:
+        v, info = jacobi_update(v, f, nsteps=1000)
+        return v
+    else:
+        # smoothing
+        v, info = jacobi_update(v, f, nsteps=10, max_err=1e-1)
+        A = create_A(n, m)[0]
+        
+        # calculate residual
+        r = np.dot(A, v.flatten()) - f.flatten()
+        r = r.reshape(n,m)
+        
+        # downsample resitdual error
+        r = restrict(r)
+        zero_array = np.zeros(r.shape)
+        
+        # interploate the correction computed on a corser grid
+        d = interpolate_array(MGV(r, zero_array))
+        
+        # Add prolongated corser grid solution onto the finer grid
+        v = v - d
+        
+        v, info = jacobi_update(v, f, nsteps=10, max_err=1e-6)
+        return v
+
+
+sigma = 0
+
+k = 5 
+n = 2**k+2
+m = 2**(k)+2
+
+hx = 1/n
+hy = 1/m
+
+L = 1
+H = 1
+
+x = np.linspace(0, L, n)
+y = np.linspace(0, H, m)
+XX, YY = np.meshgrid(x, y)
+
+f = np.ones((n,m))*0
+v = np.ones((n,m))*0
+
+err = 1e-3
+n_cycles = 100
+loop = True
+cycle = 0
+
+while loop:
+    cycle += 1
+    v_new = MGV(f, v)
+    
+    if np.abs(v - v_new).max() < err:
+        loop = False
+    if cycle == n_cycles:
+        loop = False
+    
+    v = v_new
+
+print("Number of cycles " + str(cycle))
+plt.contourf(v)
