@@ -148,7 +148,7 @@ def multilevel(T, k_final, e =1e-2, num_steps=5000):
     
     return T, ks, iterations
 
-starting_point = grid_with_boundary(4)
+starting_point = grid_with_boundary(5)
 
-T_end, ks_end, its = multilevel(starting_point, 10)
-plt.imshow(T_end)
+# T_end, ks_end, its = multilevel(starting_point, 10)
+# plt.imshow(T_end)
