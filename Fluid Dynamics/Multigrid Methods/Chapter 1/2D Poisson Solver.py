@@ -11,7 +11,10 @@ from scipy.signal import convolve2d
 from mpl_toolkits.mplot3d import Axes3D
 from scipy.interpolate import griddata
 from matplotlib import cm
-
+import kernprof
+from line_profiler import LineProfiler
+from scipy.sparse import csr_matrix
+import time
 
 def restrict(A):
     """
@@ -127,6 +130,38 @@ def calc_RJ(rows, cols):
     return M
 
 
+def create_jacobi_update_arrays(n,m):
+    A, LaddU, invD = create_A(n,m)
+    Rj = calc_RJ(n,m)
+    A = csr_matrix(A)
+    LaddU = csr_matrix(LaddU)
+    invD = csr_matrix(invD)
+    Rj = csr_matrix(Rj)
+    return A, Rj, invD
+
+
+def jacobi_update2(v, f, A, Rj, invD, nsteps=1, max_err=1e-3):
+    """
+    """
+    f_inner = f[1:-1, 1:-1].flatten()
+    n = v.shape[0]
+    m = v.shape[1]
+    update=True
+    step = 0
+    v.set_BC()
+    while update:
+        v_old = v.copy()
+        step += 1
+        vt = v_old[1:-1, 1:-1].flatten()
+        vt = Rj.dot(vt) + invD.dot(f_inner)
+        v[1:-1, 1:-1] = vt.reshape((n-2),(m-2))
+        err = v - v_old
+        if step == nsteps or np.abs(err).max()<max_err:
+            update=False
+    
+    return v, (step, np.abs(err).max())
+
+
 def jacobi_update(v, f, nsteps=1, max_err=1e-3):
     """
     Uses a jacobian update matrix to solve nabla(v) = f
@@ -137,14 +172,18 @@ def jacobi_update(v, f, nsteps=1, max_err=1e-3):
     m = v.shape[1]
     A, LaddU, invD = create_A(n-2, m-2)
     Rj = calc_RJ(n-2,m-2)
-
+    A = csr_matrix(A)
+    LaddU = csr_matrix(LaddU)
+    invD = csr_matrix(invD)
+    Rj = csr_matrix(Rj)
+    
     update=True
     step = 0
     while update:
         v_old = v.copy()
         step += 1
         vt = v_old[1:-1, 1:-1].flatten()
-        vt = np.dot(Rj, vt) + np.dot(invD, f_inner)
+        vt = Rj.dot(vt) + invD.dot(f_inner)
         v[1:-1, 1:-1] = vt.reshape((n-2),(m-2))
         err = v - v_old
         if step == nsteps or np.abs(err).max()<max_err:
@@ -191,7 +230,7 @@ def MGV(f, v):
 sigma = 0
 
 # Setting up the grid
-k = 6
+k = 7
 n = 2**k+2
 m = 2**(k)+2
 
@@ -207,6 +246,7 @@ XX, YY = np.meshgrid(x, y)
 
 # Setting up the initial conditions
 f = np.ones((n,m))
+f[1:int(m/2), 1:int(n/2)] = -1
 v = np.zeros((n,m))
 
 # How many V cyles to perform
@@ -215,18 +255,37 @@ n_cycles = 10
 loop = True
 cycle = 0
 
+start = time.time()
+A, Rj, invD = create_jacobi_update_arrays(n-2, m-2)
+end = time.time()
+print(end - start)
+
+# lp = LineProfiler()
+# lp_wrapper = lp(jacobi_update2)
+# lp_wrapper(v, f, A, Rj, invD, nsteps=100)
+# lp.print_stats()
+
+start = time.time()
+u = jacobi_update2(v, f, A, Rj, invD, nsteps=10000)
+end = time.time()
+print(end - start)
+print(str(u[1][0]) + " loops")
+print(str(u[1][1]) + " Error")
+
+# u = MGV(f, v)
+
 # Perform V cycles until converged or reached the maximum
 # number of cycles
-while loop:
-    cycle += 1
-    v_new = MGV(f, v)
+# while loop:
+#     cycle += 1
+#     v_new = MGV(f, v)
     
-    if np.abs(v - v_new).max() < err:
-        loop = False
-    if cycle == n_cycles:
-        loop = False
+#     if np.abs(v - v_new).max() < err:
+#         loop = False
+#     if cycle == n_cycles:
+#         loop = False
     
-    v = v_new
+#     v = v_new
 
-print("Number of cycles " + str(cycle))
-plt.contourf(v)
+# print("Number of cycles " + str(cycle))
+# plt.contourf(v)

@@ -104,5 +104,5 @@ def MGV(x, b, pm, level=0):
         # Add prolongated corser grid solution onto the finer grid
         x.x = x.x - d.x
         
-        jacobi_update(x, b, A, Rj, invD, nsteps=100, max_err=1e-6)
+        jacobi_update(x, b, A, Rj, invD, nsteps=10000, max_err=1e-6)
         return x
