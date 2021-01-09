@@ -9,7 +9,6 @@ import field as f
 import possion_matrix
 import MG
 import matplotlib.pyplot as plt
-import numpy as np
 
 k = 7
 n = 2**k+2
